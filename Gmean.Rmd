@@ -88,10 +88,12 @@ sb1 <- function(x) S01*exp(-x*ADC1) # monoexponential curve 1
 sb2 <- function(x) S02*exp(-x*ADC2) # monoexponential curve 2
 sbf <- function(x) (S01*exp(-x*ADC1)+S02*exp(-x*ADC2))/2 # arithmetic average
 sbr <- function(x) sqrt(S01*exp(-x*ADC1)*S02*exp(-x*ADC2)) # geometric average
-adc_f_b1 <- function (x) (-log((S01*exp(-x*ADC1)+S02*exp(-x*ADC2))/2)+log((S01+S02)/2))/(x-b0) # adc calculated using the arithmetic mean
-adc_g_b1 <- function (x) ((-log(S01*exp(-x*ADC1))+log(S01))/(x-b0) + (-log(S02*exp(-x*ADC2))+log(S02))/(x-b0))/2 # adc calculated using the geometric mean
+adc_f_b1 <- function (x) (-log((S01*exp(-x*ADC1)+S02*exp(-x*ADC2))/2)+log((S01+S02)/2))/(x-b0) # adc calculated using the arithmetic mean vs upper b-vale
+adc_g_b1 <- function (x) ((-log(S01*exp(-x*ADC1))+log(S01))/(x-b0) + (-log(S02*exp(-x*ADC2))+log(S02))/(x-b0))/2 # adc calculated using the geometric mean vs upper b-vale
 adc_f_rat <- function (x) ((-log((S01*exp(-b1*ADC1)+S02*exp(-b1*x*ADC1))/2)+log((S01+S02)/2))/(b1-b0))/((ADC1+x*ADC1)/2) # ratio of arithmetic adc vs mean adc
 adc_g_rat <- function (x) ((-log(S01*exp(-b1*ADC1))+log(S01))/(b1-b0) + (-log(S02*exp(-b1*x*ADC1))+log(S02))/(b1-b0))/2/((ADC1+x*ADC1)/2) # ratio of geom adc vs mean adc (always 1)
+adc_f_s0 <- function (x) (-log((S01*exp(-b1*ADC1)+x*S01*exp(-b1*ADC2))/2)+log((S01+x*S01)/2))/(b1-b0) # adc calculated using the arithmetic mean vs signal intensity
+adc_g_s0 <- function (x) ((-log(S01*exp(-b1*ADC1))+log(S01))/(b1-b0) + (-log(x*S01*exp(-b1*ADC2))+log(x*S01))/(b1-b0))/2 # adc calculated using the geometric mean vs signal intensity
 ```
 
 Figure 1 demonstrates the results of taking the geometric vs. the arithmetic mean of two voxels with different diffusion coefficients as a function of the b-value. For this example a fast decaying signal with an ADC of $`r ADC2` \frac{mm^2}{10^3s}$ (approximating free diffusion in water) and a slow decaying signal with an ADC of $`r ADC1` \frac{mm^2}{10^3s}$ (approximating diffusion in tissue such as brain matter) was used. It is importoant to note that in die following plots the initial signal intensity was set to 1 for both voxels. Initial signal intensities also play an important role when averaging as will be shown later.
@@ -222,4 +224,48 @@ Naturally, the two curves meet when both monoexponential $ADC$s have the same va
 
 \newpage
 
+Finally, we will observe the effect of the initial signal intensity on the calculated ADC values in figure 4.
 
+```{r, adcfig4, echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.height=6, fig.width=8, fig.cap="ADC value calculated from the arithmetic (red) and geometric (green) mean as a function of the ratio of the initial signal intensities."}
+
+p <- ggplot(data = params)
+p +     layer (stat = "function",
+           fun = adc_f_s0,
+           size = 1,
+           alpha = 0.8,
+           mapping = aes (color="sb1")
+           ) + 
+        layer (stat = "function",
+           fun = adc_g_s0,
+           size = 1,
+           alpha = 0.8,
+           mapping = aes (color="sb2")
+           ) + 
+        layer (stat = "function",
+           fun = adc1f,
+           size = 1,
+           alpha = 0.8,
+           linetype = "dashed",
+           mapping = aes (color="sb3")
+           ) + 
+        layer (stat = "function",
+           fun = adc2f,
+           size = 1,
+           alpha = 0.8,
+           linetype = "dashed",
+           mapping = aes (color="sb4")
+           ) + 
+        xlim(0,10) +
+        ylim(ADC1,ADC2) +
+        xlab("S02/S01") + 
+        ylab("Estimated ADC") +
+        scale_color_manual(name = "",
+                           values = c("indianred4",
+                                      "seagreen4",
+                                      "midnightblue",
+                                      "midnightblue"),
+                           labels = c("Arithmetic Mean",
+                                      "Geometric Mean",
+                                      "ADC 1",
+                                      "ADC 2"))
+```
