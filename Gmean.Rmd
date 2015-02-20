@@ -1,0 +1,225 @@
+---
+title: "Geometric vs. Aithmetic Mean in Diffusion Weighted Magnetic Resonance Imaging"
+author: "Moritz Schneider"
+date: "Wednesday, February 18, 2015"
+output:
+  pdf_document:
+    fig_caption: yes
+  word_document: default
+header-includes:
+- \usepackage{fancyhdr}
+- \usepackage{amsmath}
+- \pagestyle{fancy}
+- \fancyhead[CO,CE]{Geometric vs. Arithmetic Mean in DWI}
+
+---
+
+
+```{r, loadlibraries, echo=FALSE, message=FALSE}
+library("ggplot2")
+library(knitr)
+library(reshape)
+library(stargazer)
+library(corrplot)
+library(RColorBrewer)
+```
+
+#Summary
+
+The purpose of this Study is to compare the use of the arithmetic mean vs. the geometric mean of signal intensities in region of interest based analysis of diffusion weighted imaging (DWI)
+
+#Theory
+
+The analysis of DWI data usually invovles exponential model functions, such as ADC, Kurtosis and IVIM. Parameters are estimated using the signal intensities at different b-values (b-values are tailored to the model) and to improve the signal to noise ratio, often signal intensities are averaged on a region of interest basis. However, using the arithmetic mean in such circumstance can lead to significant bias in the estimated parameters, e.g. when taking the arithmetic mean of the signal intensities of two voxels with same $S_{0}$, one with low and one with fast diffusion but both monoexponential, the resulting signal intensity would no longer be a monoexponential function of the b-value but a biexpontial one. Performing a subsequent monoexponital ADC determination would lead to a biased value, meaning the resulting ADC would not be the mean of the two inital ADCS but biased depending on the choice of b-values used and the initial signal intensities in each voxel. A simple remedy for this would be to use the geometric mean of the signal intensities instead of the arithmetic one. 
+
+The geometric mean is defined as:
+
+$$
+\begin{aligned}
+\bar{x}_\mathrm{geom} = \sqrt[n]{\prod_{i=1}^n{x_i}} = \sqrt[n]{x_1 \cdot x_2 \dotsm x_n}
+\end{aligned}
+$$
+
+equivalently:
+
+$$
+\begin{aligned}
+\log \bar{x}_\mathrm{geom} = \frac{1}{n}\sum_{i=1}^n \log x_i
+\end{aligned}
+$$
+
+This expression can be used to show, that the geometric mean of $n$ monoexponential functions is itself a monoexponential function:
+
+$$
+\begin{aligned}
+S_n(x) = S_n(0) \cdot e^{a_n \cdot x} \\
+\Rightarrow \log \bar{S}_n(x)_\mathrm{geom} = \frac{1}{n}\sum_{i=1}^n \log S_n(x) \\
+= \frac{1}{n}\sum_{i=1}^n \log (S_n(0) \cdot e^{a_n \cdot x}) \\
+= \frac{1}{n}\sum_{i=1}^n \log S_n(0) + \frac{1}{n}\sum_{i=1}^n \log (e^{a_n \cdot x}) \\
+= \frac{1}{n}\sum_{i=1}^n \log S_n(0) + \frac{1}{n}\sum_{i=1}^n a_n \cdot x \\
+= \log \bar{S}_n(0)_\mathrm{geom} + \bar{a}_\mathrm{arithm} \cdot x \\
+\Rightarrow \bar{S}_n(x)_\mathrm{geom} = \bar{S}_n(0)_\mathrm{geom} \cdot e^{\bar{a}_\mathrm{arithm} \cdot x} \\
+\end{aligned}
+$$
+
+Therefore, the geometric mean results in another monoexponential function where the exponent is just the arithmetic mean of the initial exponents.
+On the other hand, taking the arithmetic mean of $n$ monoexponential functions results in a $n$-exponential function.
+
+#Simulations
+
+In the following we will run some simulations to investigate the differnce of using the geometric vs. the arithemtic mean in typical DWI imaging settings.
+
+\newpage
+
+##ADC
+
+```{r, adcsim, echo=FALSE}
+ADC1 <- 0.0005
+ADC2 <- 0.003
+S01 <- 1
+S02 <- 1
+b0 <- 0
+b1 <- 800
+params <- data.frame(ADC1, ADC2, S01, S02, b0, b1)
+
+adc1f <- function(x) ADC1
+adc2f <- function(x) ADC2
+sb1 <- function(x) S01*exp(-x*ADC1) # monoexponential curve 1
+sb2 <- function(x) S02*exp(-x*ADC2) # monoexponential curve 2
+sbf <- function(x) (S01*exp(-x*ADC1)+S02*exp(-x*ADC2))/2 # arithmetic average
+sbr <- function(x) sqrt(S01*exp(-x*ADC1)*S02*exp(-x*ADC2)) # geometric average
+adc_f_b1 <- function (x) (-log((S01*exp(-x*ADC1)+S02*exp(-x*ADC2))/2)+log((S01+S02)/2))/(x-b0) # adc calculated using the arithmetic mean
+adc_g_b1 <- function (x) ((-log(S01*exp(-x*ADC1))+log(S01))/(x-b0) + (-log(S02*exp(-x*ADC2))+log(S02))/(x-b0))/2 # adc calculated using the geometric mean
+adc_f_rat <- function (x) ((-log((S01*exp(-b1*ADC1)+S02*exp(-b1*x*ADC1))/2)+log((S01+S02)/2))/(b1-b0))/((ADC1+x*ADC1)/2) # ratio of arithmetic adc vs mean adc
+adc_g_rat <- function (x) ((-log(S01*exp(-b1*ADC1))+log(S01))/(b1-b0) + (-log(S02*exp(-b1*x*ADC1))+log(S02))/(b1-b0))/2/((ADC1+x*ADC1)/2) # ratio of geom adc vs mean adc (always 1)
+```
+
+Figure 1 demonstrates the results of taking the geometric vs. the arithmetic mean of two voxels with different diffusion coefficients as a function of the b-value. For this example a fast decaying signal with an ADC of $`r ADC2` \frac{mm^2}{10^3s}$ (approximating free diffusion in water) and a slow decaying signal with an ADC of $`r ADC1` \frac{mm^2}{10^3s}$ (approximating diffusion in tissue such as brain matter) was used. It is importoant to note that in die following plots the initial signal intensity was set to 1 for both voxels. Initial signal intensities also play an important role when averaging as will be shown later.
+
+
+```{r, adcfig1, echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.height=6, fig.width=8, fig.cap="Average signal intensities using the arithmetic (red) and geometric (green) mean of two monoexponential functions (blue) as a function of the b-value. The Y-scale is logged and clearly demonstrates how the arithmetic mean does not follow a monoexponential decay"}
+
+p <- ggplot(data = params)
+p +     layer (stat = "function",
+           fun = sb1,
+           size = 1,
+           alpha = 0.8,
+           mapping = aes (color="sb1")
+           ) + 
+        layer (stat = "function",
+           fun = sb2,
+           size = 1,
+           alpha = 0.8,
+           mapping = aes (color="sb2")
+           ) + 
+        layer (stat = "function",
+           fun = sbf,
+           size = 1,
+           alpha = 0.8,
+           mapping = aes (color="sb3")
+           ) + 
+        layer (stat = "function",
+           fun = sbr,
+           size = 1,
+           alpha = 0.8,
+           mapping = aes (color="sb4")
+           ) + 
+        xlim(0,1000) +
+        scale_y_log10() +
+        xlab("b-value") + 
+        ylab("Signal Intensity") +
+        scale_color_manual(name = "Curves",
+                           values = c("midnightblue",
+                                      "midnightblue",
+                                      "indianred4",
+                                      "seagreen4"),
+                           labels = c("Mono1",
+                                      "Mono2",
+                                      "Arithmetic Mean",
+                                      "Geometric Mean"))
+```
+
+\newpage
+
+It is apparent, that the arithmetic mean does not follow a monoexponential signal decay. This would lead to a significant underestimation of the mean diffusion coefficient in the two voxels depending on the b-values used. This means that non only does the arithmetic mean lead to a biased result, it is also highly dependant on the chosen diffusion weighting as can be seen in figure 2.
+
+```{r, adcfig2, echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.height=6, fig.width=8, fig.cap="ADC value calculated from the arithmetic (red) and geometric (green) mean as a function of the upper b-value in case of using only two b-values (0 and x). The ADC value calculated from the geometric mean correctly estimates the resulting ADC as the average of the inital ADCs for al b-values, however, the ADC value estimated from the arithmetic mean shows a strong dependance on the upper b-value and converges to the lower ADC as the upper b-value increases."}
+
+p <- ggplot(data = params)
+p +     layer (stat = "function",
+           fun = adc_f_b1,
+           size = 1,
+           alpha = 0.8,
+           mapping = aes (color="sb1")
+           ) + 
+        layer (stat = "function",
+           fun = adc_g_b1,
+           size = 1,
+           alpha = 0.8,
+           mapping = aes (color="sb2")
+           ) + 
+        layer (stat = "function",
+           fun = adc1f,
+           size = 1,
+           alpha = 0.8,
+           linetype = "dashed",
+           mapping = aes (color="sb3")
+           ) + 
+        layer (stat = "function",
+           fun = adc2f,
+           size = 1,
+           alpha = 0.8,
+           linetype = "dashed",
+           mapping = aes (color="sb4")
+           ) + 
+        xlim(1,2000) +
+        ylim(ADC1,ADC2) +
+        xlab("Upper b-value") + 
+        ylab("Estimated ADC") +
+        scale_color_manual(name = "",
+                           values = c("indianred4",
+                                      "seagreen4",
+                                      "midnightblue",
+                                      "midnightblue"),
+                           labels = c("Arithmetic Mean",
+                                      "Geometric Mean",
+                                      "ADC 1",
+                                      "ADC 2"))
+```
+
+\newpage
+
+The extent to how much the ADC calculated with the arithmetic mean deviates from the actual mean ADC, also depends on the amount of the differenc between the initial monoexponential coefficients. This is demonstrated in figure 3, where the ratio of the calculated ADC vs. the actual mean ADC is plottet against the ratio of the two initial monoexponential ADCs. For figure 3 the initial signal intensities $S_0$ were set to 1, ADC1 was fixed to $`r ADC1` \frac{mm^2}{10^3s}$ and the upper b-value used to calculate the ADCs was set to $`r params$b1`$.
+
+
+```{r, adcfig3, echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.height=6, fig.width=8, fig.cap="ratio of the calculated ADC vs. the actual mean ADC is plottet against the ratio of the two initial monoexponential ADCs."}
+
+p <- ggplot(data = params)
+p + layer (stat = "function",
+           fun = adc_f_rat,
+           size = 1,
+           alpha = 0.8,
+           mapping = aes (color="sb3")
+           ) + 
+        layer (stat = "function",
+           fun = adc_g_rat,
+           size = 1,
+           alpha = 0.8,
+           mapping = aes (color="sb4")
+           ) + 
+        xlim(0,5) +
+        ylim(0.75,1.25) +
+        xlab("ADC2 / ADC1") + 
+        ylab("calculated ADC / mean ADC") +
+        scale_color_manual(name = "",
+                           values = c("indianred4",
+                                      "seagreen4"),
+                           labels = c("Arithmetic Mean",
+                                      "Geometric Mean"))
+```
+
+Naturally, the two curves meet when both monoexponential $ADC$s have the same value, e.g. when $\frac{ADC2}{ADC1} = 1$, however, the further the ratio deviates from 1, the bigger the bias of the adc calculated with the arithmetic mean gets.
+
+\newpage
+
+
