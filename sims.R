@@ -80,6 +80,8 @@ norm1a <- rnorm(length(sb1), sb1*cos(2), sd = sdn)
 norm1b <- rnorm(length(sb1), sb1*sin(2), sd = sdn)
 rice1 <- sqrt(norm1a^2+norm1b^2)
 
+
+
 norm2a <- rnorm(length(sb2), sb2*cos(2), sd = sdn)
 norm2b <- rnorm(length(sb2), sb2*sin(2), sd = sdn)
 rice2 <- sqrt(norm2a^2+norm2b^2)
